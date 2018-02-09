@@ -48,6 +48,7 @@ var (
 
 var (
 	errPlatformNotSupported = errors.New("Platform not suported")
+	errFileCanNotBeRead     = errors.New("SQL File cannot be read")
 )
 
 // Dumpin main struct
@@ -115,7 +116,7 @@ func (m *Dumpin) ExecuteFile(sqlFilePath string, customArgs ...string) (string, 
 
 	sql, err := ioutil.ReadFile(sqlFilePath)
 	if err != nil {
-		return "", errors.New("File cannot be read")
+		return "", errFileCanNotBeRead
 	}
 
 	return m.Execute(sql, customArgs...)
@@ -140,16 +141,12 @@ func (m *Dumpin) Execute(sql []byte, customArgs ...string) (string, error) {
 	stdin.Write(sql)
 
 	if err := cmd.Start(); err != nil {
-		stdout := outbuf.String()
-		stderr := errbuf.String()
-		return "", fmt.Errorf("Cannot start: stdout: %v, stderr: %v", stdout, stderr)
+		return outbuf.String(), errors.New(errbuf.String())
 	}
 	stdin.Close()
 
 	if err := cmd.Wait(); err != nil {
-		stdout := outbuf.String()
-		stderr := errbuf.String()
-		return "", fmt.Errorf("Cannot wait: stdout: %v, stderr: %v", stdout, stderr)
+		return outbuf.String(), errors.New(errbuf.String())
 	}
 
 	return outbuf.String(), nil
