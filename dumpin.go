@@ -15,9 +15,8 @@ type Platform string
 
 // Platforms available to use
 const (
-	OsLINUX   Platform = "linux"
-	OsOSX     Platform = "osx"
-	OsWINDOWS Platform = "windows"
+	OsLINUX Platform = "linux"
+	OsOSX   Platform = "osx"
 )
 
 // OsAUTODETECT tries to autodetect the OS
@@ -39,9 +38,8 @@ const binariesPath = "bin/"
 var (
 	binaries = map[Engine]map[Platform]string{
 		EngMYSQL: map[Platform]string{
-			OsLINUX:   "mysql",
-			OsOSX:     "mysql",
-			OsWINDOWS: "mysql.exe",
+			OsLINUX: "mysql",
+			OsOSX:   "mysql",
 		},
 	}
 )
@@ -158,8 +156,6 @@ func determinePlatform() (Platform, error) {
 		return OsLINUX, nil
 	case "darwin":
 		return OsOSX, nil
-	case "windows":
-		return OsWINDOWS, nil
 	}
 
 	return OsNOTSUPPORTED, errPlatformNotSupported
