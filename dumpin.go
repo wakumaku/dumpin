@@ -2,75 +2,34 @@ package dumpin
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os/exec"
-	"path"
-	"runtime"
+	"strings"
+
+	"github.com/pkg/errors"
 )
 
-// Platform to use
-type Platform string
+// ErrMySqlClientNotFound is raised when the mysql client is not found in path to be executed
+var ErrMySqlClientNotFound = errors.New("mysql client not found in PATH, please, install mysql client")
 
-// Platforms available to use
-const (
-	OsLINUX Platform = "linux"
-	OsOSX   Platform = "osx"
-)
-
-// OsAUTODETECT tries to autodetect the OS
-const OsAUTODETECT Platform = "auto"
-
-// OsNOTSUPPORTED is returned if no valid OS found
-const OsNOTSUPPORTED Platform = "notsupported"
-
-// Engine types to support
-type Engine string
-
-// Engines list
-const (
-	EngMYSQL Engine = "mysql"
-)
-
-const binariesPath = "bin/"
-
-var (
-	binaries = map[Engine]map[Platform]string{
-		EngMYSQL: map[Platform]string{
-			OsLINUX: "mysql",
-			OsOSX:   "mysql",
-		},
-	}
-)
-
-var (
-	errPlatformNotSupported = errors.New("Platform not suported")
-	errFileCanNotBeRead     = errors.New("SQL File cannot be read")
-)
+var ErrFileCanNotBeRead = errors.New("SQL File cannot be read")
+var ErrCannotPipeInContent = errors.New("OS error, cannot pipe in the SQL file")
 
 // Dumpin main struct
 type Dumpin struct {
-	platform Platform
-	engine   Engine
-	config   Config
+	config Config
 }
 
 // New Dumpin
-func New(platform Platform, engine Engine, config Config) (*Dumpin, error) {
+func New(config Config) (*Dumpin, error) {
 
-	if platform == OsAUTODETECT {
-		platformDetected, err := determinePlatform()
-		if err != nil {
-			return nil, err
-		}
-		platform = platformDetected
+	if _, err := isMySqlCliAvailable(); err != nil {
+		return nil, err
 	}
 
 	return &Dumpin{
-		platform: platform,
-		engine:   engine,
-		config:   config,
+		config: config,
 	}, nil
 }
 
@@ -105,38 +64,36 @@ func (m *Dumpin) buildArgs() []string {
 	}
 }
 
-func (m *Dumpin) getExecutableFile() string {
-	return fmt.Sprintf("%s%s%s/%s/%s", packagePath(), binariesPath, m.engine, m.platform, binaries[m.engine][m.platform])
-}
-
 // ExecuteFile ...
 func (m *Dumpin) ExecuteFile(sqlFilePath string, customArgs ...string) (string, error) {
 
 	sql, err := ioutil.ReadFile(sqlFilePath)
 	if err != nil {
-		return "", errFileCanNotBeRead
+		return "", ErrFileCanNotBeRead
 	}
 
 	return m.Execute(sql, customArgs...)
 }
 
-// Execute ...
+// Execute the sql file
 func (m *Dumpin) Execute(sql []byte, customArgs ...string) (string, error) {
 
 	var outbuf, errbuf bytes.Buffer
 
 	customArgs = append(m.buildArgs(), customArgs...)
 
-	cmd := exec.Command(m.getExecutableFile(), customArgs...)
+	cmd := exec.Command("/bin/sh", "-c", "mysql "+strings.Join(customArgs, " "))
 	cmd.Stdout = &outbuf
 	cmd.Stderr = &errbuf
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return "", errors.New("Piping in")
+		return "", ErrCannotPipeInContent
 	}
 
-	stdin.Write(sql)
+	if _, err := stdin.Write(sql); err != nil {
+		return "", errors.Wrap(err, "cannot pipe in the SQL")
+	}
 
 	if err := cmd.Start(); err != nil {
 		return outbuf.String(), errors.New(errbuf.String())
@@ -150,22 +107,10 @@ func (m *Dumpin) Execute(sql []byte, customArgs ...string) (string, error) {
 	return outbuf.String(), nil
 }
 
-func determinePlatform() (Platform, error) {
-	switch runtime.GOOS {
-	case "linux":
-		return OsLINUX, nil
-	case "darwin":
-		return OsOSX, nil
+func isMySqlCliAvailable() (bool, error) {
+	cmd := exec.Command("/bin/sh", "-c", "command -v mysql")
+	if err := cmd.Run(); err != nil {
+		return false, ErrMySqlClientNotFound
 	}
-
-	return OsNOTSUPPORTED, errPlatformNotSupported
-}
-
-func packagePath() string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("No caller information")
-	}
-
-	return path.Dir(filename) + "/"
+	return true, nil
 }
