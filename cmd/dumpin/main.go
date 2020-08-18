@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"wakumaku/dumpin/v3"
+	"github.com/wakumaku/dumpin/v3"
 )
 
 func main() {
